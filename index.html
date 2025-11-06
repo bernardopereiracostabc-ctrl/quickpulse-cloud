@@ -3,16 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>QuickPulse — Simple Feedback</title>
-  <!-- Tailwind via CDN -->
+  <title>QuickPulse — Cloud Feedback</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Chart.js for bar charts -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- QRCode generator (davidshimjs) -->
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-  <style>
-    .pill { border-radius: 9999px; }
-  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.47.10/dist/umd/supabase.js"></script>
+  <style>.pill{border-radius:9999px}</style>
 </head>
 <body class="min-h-screen bg-gradient-to-b from-white to-slate-50 p-6">
   <div class="max-w-5xl mx-auto">
@@ -21,45 +17,47 @@
         <div id="brandLogoWrap" class="w-9 h-9 rounded-xl bg-black/90 text-white grid place-items-center font-bold overflow-hidden">Q</div>
         <h1 id="brandName" class="text-xl font-semibold">QuickPulse</h1>
       </div>
-      <nav class="flex gap-2">
-        <button class="px-3 py-1 border rounded pill" id="tabHost">Host</button>
-        <button class="px-3 py-1 border rounded pill" id="tabRespond">Respond</button>
-      </nav>
+      <div class="flex items-center gap-2">
+        <span id="cloudBadge" class="text-xs px-2 py-1 pill border">Cloud: <span id="cloudState">Not connected</span></span>
+        <button id="cloudSettingsBtn" class="px-3 py-1 border rounded pill">Cloud Settings</button>
+        <button id="tabHost" class="px-3 py-1 border rounded pill">Host</button>
+        <button id="tabRespond" class="px-3 py-1 border rounded pill">Respond</button>
+      </div>
     </header>
 
-    <!-- HOST: Builder + Share + Results -->
+    <dialog id="cloudDialog" class="rounded-2xl p-0 w-full max-w-lg">
+      <form method="dialog" class="p-6 space-y-4">
+        <h3 class="text-lg font-semibold">Connect to Supabase (cloud mode)</h3>
+        <div>
+          <label class="block text-sm mb-1">SUPABASE_URL</label>
+          <input id="sbUrl" class="w-full border rounded px-3 py-2" placeholder="https://YOUR-PROJECT.supabase.co"/>
+        </div>
+        <div>
+          <label class="block text-sm mb-1">SUPABASE_ANON_KEY</label>
+          <textarea id="sbAnon" rows="3" class="w-full border rounded px-3 py-2" placeholder="ey..."></textarea>
+        </div>
+        <div class="flex items-center justify-between">
+          <div class="text-xs opacity-60">Stored locally in this browser.</div>
+          <div class="flex gap-2">
+            <button id="sbClear" type="button" class="px-3 py-2 border rounded">Clear</button>
+            <button id="sbSave" type="submit" class="px-3 py-2 border rounded bg-black text-white">Save</button>
+          </div>
+        </div>
+      </form>
+    </dialog>
+
     <section id="hostSection" class="space-y-6">
       <div class="w-full max-w-3xl mx-auto bg-white border shadow rounded-2xl">
         <div class="p-6 space-y-4">
           <h2 class="text-2xl font-semibold">Create your survey</h2>
-
-          <!-- Branding -->
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-2xl">
             <div class="md:col-span-3 font-medium">Branding</div>
-            <div>
-              <label class="block text-sm mb-1">Brand name</label>
-              <input id="brandNameInput" class="w-full border rounded px-3 py-2" value="QuickPulse"/>
-            </div>
-            <div>
-              <label class="block text-sm mb-1">Accent color (hex)</label>
-              <input id="accentInput" class="w-full border rounded px-3 py-2" value="#0ea5e9"/>
-            </div>
-            <div>
-              <label class="block text-sm mb-1">Logo URL (optional)</label>
-              <input id="logoInput" class="w-full border rounded px-3 py-2" placeholder="https://…/logo.png"/>
-            </div>
+            <div><label class="block text-sm mb-1">Brand name</label><input id="brandNameInput" class="w-full border rounded px-3 py-2" value="QuickPulse"/></div>
+            <div><label class="block text-sm mb-1">Accent color (hex)</label><input id="accentInput" class="w-full border rounded px-3 py-2" value="#0ea5e9"/></div>
+            <div><label class="block text-sm mb-1">Logo URL (optional)</label><input id="logoInput" class="w-full border rounded px-3 py-2" placeholder="https://…/logo.png"/></div>
           </div>
-
-          <div>
-            <label class="block text-sm mb-1">Title</label>
-            <input id="titleInput" class="w-full border rounded px-3 py-2" value="Training feedback"/>
-          </div>
-
-          <div>
-            <label class="block text-sm mb-1">Description</label>
-            <textarea id="descInput" class="w-full border rounded px-3 py-2" rows="2">Rate this session (1 = poor, 5 = excellent)</textarea>
-          </div>
-
+          <div><label class="block text-sm mb-1">Title</label><input id="titleInput" class="w-full border rounded px-3 py-2" value="Training feedback"/></div>
+          <div><label class="block text-sm mb-1">Description</label><textarea id="descInput" class="w-full border rounded px-3 py-2" rows="2">Rate this session (1 = poor, 5 = excellent)</textarea></div>
           <div class="space-y-3">
             <div class="flex items-center justify-between">
               <h3 class="text-lg font-medium">Questions</h3>
@@ -70,56 +68,32 @@
             </div>
             <div id="questionsWrap" class="space-y-3"></div>
           </div>
-
-          <div class="flex gap-3">
-            <button id="generateBtn" class="px-4 py-2 rounded text-white" style="background:#0ea5e9">Generate link & QR</button>
-          </div>
+          <div class="flex gap-3"><button id="generateBtn" class="px-4 py-2 rounded text-white" style="background:#0ea5e9">Generate link & QR</button></div>
         </div>
       </div>
-
-      <!-- Share -->
       <div id="shareCard" class="hidden w-full max-w-3xl mx-auto bg-white border shadow rounded-2xl">
         <div class="p-6 space-y-4">
           <h2 class="text-lg font-medium">Share your survey</h2>
-          <div class="flex gap-2">
-            <input id="shareLink" class="flex-1 border rounded px-3 py-2" readonly/>
-            <button id="copyLinkBtn" class="px-3 py-2 border rounded">Copy</button>
-          </div>
+          <div class="flex gap-2"><input id="shareLink" class="flex-1 border rounded px-3 py-2" readonly/><button id="copyLinkBtn" class="px-3 py-2 border rounded">Copy</button></div>
           <div class="flex items-start gap-6">
-            <div class="space-y-2">
-              <label class="block text-sm">QR Code</label>
-              <div id="qrcode" class="border rounded-2xl p-2"></div>
-              <a id="downloadQR" class="inline-block px-3 py-2 border rounded" download="QuickPulse_QR.png">Download QR</a>
-            </div>
-            <p class="text-sm opacity-70 max-w-md">Tip: Put this QR on the last slide so attendees can scan and respond instantly.</p>
+            <div class="space-y-2"><label class="block text-sm">QR Code</label><div id="qrcode" class="border rounded-2xl p-2"></div><a id="downloadQR" class="inline-block px-3 py-2 border rounded" download="QuickPulse_QR.png">Download QR</a></div>
+            <p class="text-sm opacity-70 max-w-md">Put this QR on your last slide so attendees can scan and respond instantly.</p>
           </div>
         </div>
       </div>
-
-      <!-- Results -->
       <div id="resultsCard" class="hidden w-full max-w-5xl mx-auto bg-white border shadow rounded-2xl">
         <div class="p-6 space-y-4">
-          <div class="flex items-center justify-between">
-            <h2 id="resultsTitle" class="text-xl font-semibold">Results</h2>
-            <button id="exportCSV" class="px-3 py-2 border rounded">Export CSV</button>
-          </div>
+          <div class="flex items-center justify-between"><h2 id="resultsTitle" class="text-xl font-semibold">Results</h2><button id="exportCSV" class="px-3 py-2 border rounded">Export CSV</button></div>
           <div id="chartsWrap" class="space-y-4"></div>
           <div id="commentsWrap" class="space-y-2"></div>
         </div>
       </div>
     </section>
 
-    <!-- RESPOND: Form -->
     <section id="respondSection" class="hidden">
       <div id="respondCard" class="w-full max-w-3xl mx-auto bg-white border shadow rounded-2xl">
         <div class="p-6 space-y-6">
-          <div class="flex items-center gap-3">
-            <div id="respLogo" class="w-10 h-10 rounded-xl bg-black/90 text-white grid place-items-center font-bold overflow-hidden">Q</div>
-            <div>
-              <h2 id="respBrandName" class="text-2xl font-semibold">QuickPulse</h2>
-              <div id="respTitle" class="text-sm opacity-70">Survey</div>
-            </div>
-          </div>
+          <div class="flex items-center gap-3"><div id="respLogo" class="w-10 h-10 rounded-xl bg-black/90 text-white grid place-items-center font-bold overflow-hidden">Q</div><div><h2 id="respBrandName" class="text-2xl font-semibold">QuickPulse</h2><div id="respTitle" class="text-sm opacity-70">Survey</div></div></div>
           <p id="respDesc" class="opacity-70"></p>
           <div id="respQuestions" class="space-y-3"></div>
           <button id="submitBtn" class="px-4 py-2 rounded text-white" style="background:#0ea5e9">Submit</button>
@@ -128,63 +102,40 @@
       </div>
     </section>
 
-    <footer class="mt-12 text-center text-xs opacity-60">
-      Local prototype — anonymous 1–5 ratings + one optional comment. One response per device is enforced. For multi-device collection, connect to a backend later.
-    </footer>
+    <footer class="mt-12 text-center text-xs opacity-60">Cloud-ready — anonymous 1–5 + one comment, QR, charts & CSV. Use “Cloud Settings” to sync via Supabase.</footer>
   </div>
 
 <script>
-  // ---- Types (JSDoc) ----
-  /** @typedef {{id:string,text:string,type:'likert5'|'text',required?:boolean}} Question */
-  /** @typedef {{brandName:string,accentHex:string,logoUrl?:string}} Branding */
-  /** @typedef {{id:string,title:string,description?:string,questions:Question[],createdAt:number,branding?:Branding}} Survey */
-  /** @typedef {{surveyId:string,submittedAt:number,answers:Object}} ResponseEntry */
-
-  // ---- Helpers ----
   const uid = () => Math.random().toString(36).slice(2,10);
-  const STORAGE_KEY = 'quickpulse_responses';
+  const LOCAL_STORAGE_KEY = 'quickpulse_local_responses';
+  const SB_URL_KEY = 'quickpulse_sb_url';
+  const SB_ANON_KEY = 'quickpulse_sb_anon';
   const submittedKey = (surveyId) => `quickpulse_submitted_${surveyId}`;
 
-  /** @returns {ResponseEntry[]} */
-  function getResponses(surveyId){
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const list = raw ? JSON.parse(raw) : [];
-    return list.filter(r => r.surveyId === surveyId);
-  }
-  /** @param {ResponseEntry} r */
-  function saveResponse(r){
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const list = raw ? JSON.parse(raw) : [];
-    list.push(r);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  let supabaseClient = null;
+  function getSupabase(){
+    if(supabaseClient) return supabaseClient;
+    const url = localStorage.getItem(SB_URL_KEY);
+    const anon = localStorage.getItem(SB_ANON_KEY);
+    if(url && anon){
+      supabaseClient = supabase.createClient(url, anon, { auth: { persistSession: false } });
+      document.getElementById('cloudState').textContent = 'Connected';
+      document.getElementById('cloudBadge').classList.add('border-green-400');
+    } else {
+      document.getElementById('cloudState').textContent = 'Not connected';
+      document.getElementById('cloudBadge').classList.remove('border-green-400');
+    }
+    return supabaseClient;
   }
 
   function b64encode(str){ return btoa(unescape(encodeURIComponent(str))); }
   function b64decode(b64){ return decodeURIComponent(escape(atob(b64))); }
+  function surveyToUrl(s){ return location.origin + location.pathname + '#s=' + b64encode(JSON.stringify(s)); }
+  function surveyFromHash(){ try{ const m=location.hash.match(/#s=([A-Za-z0-9+/=_-]+)/); if(!m) return null; return JSON.parse(b64decode(m[1])); }catch(e){ return null; } }
 
-  /** @param {Survey} survey */
-  function surveyToUrl(survey){
-    const json = JSON.stringify(survey);
-    const b64 = b64encode(json);
-    return location.origin + location.pathname + '#s=' + b64;
-  }
-  /** @returns {Survey|null} */
-  function surveyFromHash(){
-    try{
-      const m = location.hash.match(/#s=([A-Za-z0-9+/=_-]+)/);
-      if(!m) return null;
-      return JSON.parse(b64decode(m[1]));
-    }catch(e){ console.error(e); return null; }
-  }
+  function localSave(r){ const raw = localStorage.getItem(LOCAL_STORAGE_KEY); const list = raw ? JSON.parse(raw) : []; list.push(r); localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list)); }
+  function localGet(surveyId){ const raw = localStorage.getItem(LOCAL_STORAGE_KEY); const list = raw ? JSON.parse(raw) : []; return list.filter(r => r.surveyId === surveyId); }
 
-  // ---- State ----
-  let questions = [
-    { id: uid(), text: 'Overall, how satisfied are you?', type: 'likert5', required: true },
-    { id: uid(), text: 'How clear was the content?', type: 'likert5', required: true },
-    { id: uid(), text: 'Any comments (optional)', type: 'text' },
-  ];
-
-  // ---- DOM refs ----
   const hostSection = document.getElementById('hostSection');
   const respondSection = document.getElementById('respondSection');
   const tabHost = document.getElementById('tabHost');
@@ -193,6 +144,9 @@
   const brandNameInput = document.getElementById('brandNameInput');
   const accentInput = document.getElementById('accentInput');
   const logoInput = document.getElementById('logoInput');
+
+  const brandNameEl = document.getElementById('brandName');
+  const brandLogoWrap = document.getElementById('brandLogoWrap');
 
   const titleInput = document.getElementById('titleInput');
   const descInput = document.getElementById('descInput');
@@ -213,7 +167,6 @@
   const commentsWrap = document.getElementById('commentsWrap');
   const exportCSV = document.getElementById('exportCSV');
 
-  const respondCard = document.getElementById('respondCard');
   const respLogo = document.getElementById('respLogo');
   const respBrandName = document.getElementById('respBrandName');
   const respTitle = document.getElementById('respTitle');
@@ -221,320 +174,100 @@
   const respQuestions = document.getElementById('respQuestions');
   const submitBtn = document.getElementById('submitBtn');
 
-  const brandNameEl = document.getElementById('brandName');
-  const brandLogoWrap = document.getElementById('brandLogoWrap');
+  const cloudDialog = document.getElementById('cloudDialog');
+  const cloudSettingsBtn = document.getElementById('cloudSettingsBtn');
+  const sbUrl = document.getElementById('sbUrl');
+  const sbAnon = document.getElementById('sbAnon');
+  const sbSave = document.getElementById('sbSave');
+  const sbClear = document.getElementById('sbClear');
 
-  // ---- UI helpers ----
+  cloudSettingsBtn.onclick = () => { sbUrl.value = localStorage.getItem(SB_URL_KEY) || ''; sbAnon.value = localStorage.getItem(SB_ANON_KEY) || ''; cloudDialog.showModal(); };
+  sbClear.onclick = () => { localStorage.removeItem(SB_URL_KEY); localStorage.removeItem(SB_ANON_KEY); supabaseClient = null; getSupabase(); };
+  sbSave.onclick = (e) => { e.preventDefault(); localStorage.setItem(SB_URL_KEY, sbUrl.value.trim()); localStorage.setItem(SB_ANON_KEY, sbAnon.value.trim()); supabaseClient = null; getSupabase(); };
+
   function applyBranding(name, accent, logoUrl){
     brandNameEl.textContent = name || 'QuickPulse';
     respBrandName.textContent = name || 'QuickPulse';
-    [brandNameEl, submitBtn].forEach(el => { el.style.color = accent || '#0ea5e9'; });
-    [generateBtn, submitBtn].forEach(el => { el.style.background = accent || '#0ea5e9'; });
-
-    // Logo
-    function setLogo(el, url){
-      el.innerHTML = 'Q';
-      el.style.background = '#111827';
-      el.classList.add('grid','place-items-center','text-white','font-bold');
-      if(url){
-        const img = new Image();
-        img.src = url;
-        img.className = 'w-full h-full object-contain';
-        img.onerror = () => {}; // ignore
-        el.innerHTML = '';
-        el.appendChild(img);
-        el.style.background = 'transparent';
-      }
-    }
-    setLogo(brandLogoWrap, logoUrl);
-    setLogo(respLogo, logoUrl);
+    [generateBtn, submitBtn].forEach(el => { el.style.background = accent || '#0ea5e9'; el.style.borderColor = accent || '#0ea5e9'; });
+    brandNameEl.style.color = accent || '#0ea5e9';
+    function setLogo(el, url){ el.innerHTML='Q'; el.style.background='#111827'; el.classList.add('grid','place-items-center','text-white','font-bold'); if(url){ const img=new Image(); img.src=url; img.className='w-full h-full object-contain'; img.onerror=()=>{}; el.innerHTML=''; el.appendChild(img); el.style.background='transparent'; } }
+    setLogo(brandLogoWrap, logoUrl); setLogo(respLogo, logoUrl);
   }
+  function refreshBrandingPreview(){ applyBranding(brandNameInput.value.trim(), accentInput.value.trim(), logoInput.value.trim()); }
+  [brandNameInput, accentInput, logoInput].forEach(el => el.addEventListener('input', refreshBrandingPreview));
+  refreshBrandingPreview();
 
+  let questions = [
+    { id: uid(), text: 'Overall, how satisfied are you?', type: 'likert5', required: true },
+    { id: uid(), text: 'How clear was the content?', type: 'likert5', required: true },
+    { id: uid(), text: 'Any comments (optional)', type: 'text' },
+  ];
   function renderQuestions(){
-    questionsWrap.innerHTML = '';
-    questions.forEach((q, idx) => {
-      const box = document.createElement('div');
-      box.className = 'p-4 border rounded-2xl space-y-2';
-      const header = document.createElement('div');
-      header.className = 'flex items-center justify-between mb-1';
-      header.innerHTML = `<span class="text-sm opacity-70">Q${idx+1}</span>`;
-      const removeBtn = document.createElement('button');
-      removeBtn.className = 'px-2 py-1 text-sm border rounded';
-      removeBtn.textContent = 'Remove';
-      removeBtn.onclick = () => {
-        questions = questions.filter(x => x.id !== q.id);
-        renderQuestions();
-      };
-      header.appendChild(removeBtn);
-      box.appendChild(header);
-
-      const input = document.createElement('input');
-      input.className = 'w-full border rounded px-3 py-2';
-      input.value = q.text;
-      input.oninput = (e) => { q.text = e.target.value; };
-      box.appendChild(input);
-
-      if(q.type === 'likert5'){
-        const row = document.createElement('div');
-        row.className = 'flex items-center gap-2 mt-2';
-        const lbl = document.createElement('span');
-        lbl.className = 'text-sm';
-        lbl.textContent = 'Required';
-        const chk = document.createElement('input');
-        chk.type = 'checkbox';
-        chk.checked = !!q.required;
-        chk.onchange = () => { q.required = chk.checked; };
-        row.appendChild(chk);
-        row.appendChild(lbl);
-        box.appendChild(row);
-      } else {
-        const hint = document.createElement('p');
-        hint.className = 'text-xs opacity-70';
-        hint.textContent = 'Only one comment field is allowed. It will be optional.';
-        box.appendChild(hint);
-      }
-
+    questionsWrap.innerHTML='';
+    questions.forEach((q, idx)=>{
+      const box=document.createElement('div'); box.className='p-4 border rounded-2xl space-y-2';
+      const header=document.createElement('div'); header.className='flex items-center justify-between mb-1'; header.innerHTML=`<span class="text-sm opacity-70">Q${idx+1}</span>`;
+      const removeBtn=document.createElement('button'); removeBtn.className='px-2 py-1 text-sm border rounded'; removeBtn.textContent='Remove'; removeBtn.onclick=()=>{ questions=questions.filter(x=>x.id!==q.id); renderQuestions(); };
+      header.appendChild(removeBtn); box.appendChild(header);
+      const input=document.createElement('input'); input.className='w-full border rounded px-3 py-2'; input.value=q.text; input.oninput=(e)=> q.text=e.target.value; box.appendChild(input);
+      if(q.type==='likert5'){ const row=document.createElement('div'); row.className='flex items-center gap-2 mt-2'; const lbl=document.createElement('span'); lbl.className='text-sm'; lbl.textContent='Required'; const chk=document.createElement('input'); chk.type='checkbox'; chk.checked=!!q.required; chk.onchange=()=> q.required=chk.checked; row.appendChild(chk); row.appendChild(lbl); box.appendChild(row); } else { const hint=document.createElement('p'); hint.className='text-xs opacity-70'; hint.textContent='Only one comment field is allowed. It will be optional.'; box.appendChild(hint); }
       questionsWrap.appendChild(box);
     });
   }
+  renderQuestions();
+  addLikertBtn.onclick = ()=>{ questions.push({ id: uid(), text: 'New 1–5 question', type: 'likert5', required: true }); renderQuestions(); };
+  addTextBtn.onclick = ()=>{ if(!questions.some(q=>q.type==='text')){ questions.push({ id: uid(), text: 'Comments (optional)', type: 'text' }); renderQuestions(); } };
 
-  function addLikert(){ questions.push({ id: uid(), text: 'New 1–5 question', type: 'likert5', required: true }); renderQuestions(); }
-  function addText(){
-    if(questions.some(q => q.type === 'text')) return;
-    questions.push({ id: uid(), text: 'Comments (optional)', type: 'text' });
-    renderQuestions();
-  }
-
-  function sanitizeSurveyQuestions(qs){
-    const likerts = qs.filter(q => q.type === 'likert5');
-    const text = qs.find(q => q.type === 'text');
-    return text ? likerts.concat([text]) : likerts;
-  }
-
-  function buildSurvey(){
-    const survey = {
-      id: uid(),
-      title: titleInput.value.trim() || 'Training feedback',
-      description: descInput.value.trim(),
-      questions: sanitizeSurveyQuestions(questions),
-      createdAt: Date.now(),
-      branding: {
-        brandName: brandNameInput.value.trim() || 'QuickPulse',
-        accentHex: accentInput.value.trim() || '#0ea5e9',
-        logoUrl: logoInput.value.trim() || undefined
-      }
-    };
-    return survey;
-  }
-
-  function makeLikertButtons(qid, accent, set){
-    const wrap = document.createElement('div');
-    wrap.className = 'grid grid-cols-5 gap-2';
-    [1,2,3,4,5].forEach(n => {
-      const btn = document.createElement('button');
-      btn.className = 'px-3 py-2 border rounded-2xl';
-      btn.textContent = String(n);
-      btn.onclick = () => set(qid, n, btn, accent);
-      wrap.appendChild(btn);
-    });
-    return wrap;
-  }
+  function sanitizeSurveyQuestions(qs){ const likerts=qs.filter(q=>q.type==='likert5'); const text=qs.find(q=>q.type==='text'); return text?likerts.concat([text]):likerts; }
+  function buildSurvey(){ return { id: uid(), title: titleInput.value.trim() || 'Training feedback', description: descInput.value.trim(), questions: sanitizeSurveyQuestions(questions), createdAt: Date.now(), branding: { brandName: brandNameInput.value.trim() || 'QuickPulse', accentHex: accentInput.value.trim() || '#0ea5e9', logoUrl: logoInput.value.trim() || undefined } }; }
 
   function renderRespondForm(survey){
     applyBranding(survey.branding?.brandName, survey.branding?.accentHex, survey.branding?.logoUrl);
-    document.getElementById('respTitle').textContent = survey.title;
-    document.getElementById('respDesc').textContent = survey.description || '';
+    respTitle.textContent = survey.title; respDesc.textContent = survey.description || '';
     const accent = survey.branding?.accentHex || '#0ea5e9';
-
-    respQuestions.innerHTML = '';
-    const answers = {};
-    function setAnswer(qid, val, btn, accent){
-      answers[qid] = val;
-      // visual select
-      const parent = btn.parentElement;
-      Array.from(parent.children).forEach(ch => ch.style.background='white');
-      btn.style.background = accent;
-      btn.style.color = 'white';
-      btn.style.borderColor = accent;
-    }
-
-    survey.questions.forEach(q => {
-      const box = document.createElement('div');
-      box.className = 'space-y-3 p-4 border rounded-2xl';
-      const title = document.createElement('div');
-      title.className = 'flex items-center gap-2';
-      title.innerHTML = `<h3 class="font-medium">${q.text}</h3>` + (q.type==='likert5' && q.required ? '<span class="text-xs px-2 py-0.5 bg-black/5 pill">required</span>' : '');
-      box.appendChild(title);
-      if(q.type === 'likert5'){
-        box.appendChild(makeLikertButtons(q.id, accent, (qid,val,btn) => setAnswer(qid,val,btn,accent)));
-      }else{
-        const ta = document.createElement('textarea');
-        ta.className = 'w-full border rounded px-3 py-2';
-        ta.placeholder = 'Optional';
-        ta.oninput = () => { answers[q.id] = ta.value; };
-        box.appendChild(ta);
-      }
-      respQuestions.appendChild(box);
-    });
-
-    submitBtn.onclick = () => {
-      if(localStorage.getItem(submittedKey(survey.id))){
-        alert('Duplicate blocked: feedback already submitted from this device.');
-        return;
-      }
-      for(const q of survey.questions){
-        if(q.type==='likert5' && q.required && typeof answers[q.id] !== 'number'){
-          alert('Please answer all required questions.');
-          return;
-        }
-      }
-      saveResponse({ surveyId: survey.id, submittedAt: Date.now(), answers });
-      localStorage.setItem(submittedKey(survey.id), '1');
-      alert('Thanks! Your feedback was recorded.');
-      // reset
-      renderRespondForm(survey);
-    };
+    respQuestions.innerHTML=''; const answers = {};
+    function setAnswer(qid,val,btn){ answers[qid]=val; const parent=btn.parentElement; Array.from(parent.children).forEach(ch=>{ ch.style.background='white'; ch.style.color='black'; ch.style.borderColor='#e5e7eb'; }); btn.style.background=accent; btn.style.color='white'; btn.style.borderColor=accent; }
+    function likertButtons(qid){ const wrap=document.createElement('div'); wrap.className='grid grid-cols-5 gap-2'; [1,2,3,4,5].forEach(n=>{ const b=document.createElement('button'); b.className='px-3 py-2 border rounded-2xl'; b.textContent=String(n); b.onclick=()=>setAnswer(qid,n,b); wrap.appendChild(b); }); return wrap; }
+    survey.questions.forEach(q=>{ const box=document.createElement('div'); box.className='space-y-3 p-4 border rounded-2xl'; const title=document.createElement('div'); title.className='flex items-center gap-2'; title.innerHTML=`<h3 class="font-medium">${q.text}</h3>` + (q.type==='likert5'&&q.required?'<span class="text-xs px-2 py-0.5 bg-black/5 pill">required</span>':''); box.appendChild(title); if(q.type==='likert5'){ box.appendChild(likertButtons(q.id)); } else { const ta=document.createElement('textarea'); ta.className='w-full border rounded px-3 py-2'; ta.placeholder='Optional'; ta.oninput=()=>answers[q.id]=ta.value; box.appendChild(ta); } respQuestions.appendChild(box); });
+    submitBtn.onclick = async ()=>{ if(localStorage.getItem(submittedKey(survey.id))){ alert('Duplicate blocked: feedback already submitted from this device.'); return; } for(const q of survey.questions){ if(q.type==='likert5' && q.required && typeof answers[q.id] !== 'number'){ alert('Please answer all required questions.'); return; } } const payload={ surveyId:survey.id, submittedAt:new Date().toISOString(), answers, userAgent:navigator.userAgent }; const sb=getSupabase(); if(sb){ const { error } = await sb.from('quickpulse_responses').insert({ survey_id: payload.surveyId, submitted_at: payload.submittedAt, answers: payload.answers, user_agent: payload.userAgent }); if(error){ console.error(error); alert('Cloud save failed, saving locally.'); localSave(payload); } } else { localSave(payload); } localStorage.setItem(submittedKey(survey.id),'1'); alert('Thanks! Your feedback was recorded.'); renderRespondForm(survey); };
   }
 
-  function renderResults(survey){
-    const rows = getResponses(survey.id);
-    resultsTitle.textContent = `Results (${rows.length} responses)`;
-    chartsWrap.innerHTML = '';
-    commentsWrap.innerHTML = '';
+  async function fetchResponses(surveyId){
+    const sb = getSupabase();
+    if(sb){ const { data, error } = await sb.from('quickpulse_responses').select('*').eq('survey_id', surveyId).order('submitted_at', { ascending: true }); if(error){ console.error(error); return localGet(surveyId).map(x=>({ survey_id:x.surveyId, submitted_at:x.submittedAt, answers:x.answers })); } return data.map(row=>({ survey_id:row.survey_id, submitted_at:row.submitted_at, answers:row.answers })); }
+    return localGet(surveyId).map(x=>({ survey_id:x.surveyId, submitted_at:x.submittedAt, answers:x.answers }));
+  }
 
-    const likerts = survey.questions.filter(q => q.type === 'likert5');
-    likerts.forEach(q => {
-      const card = document.createElement('div');
-      card.className = 'bg-white border rounded-2xl p-4';
-      const head = document.createElement('div');
-      head.className = 'flex items-center justify-between mb-2';
-      head.innerHTML = `<div class="font-medium">${q.text}</div>`;
-      card.appendChild(head);
-
-      const canvas = document.createElement('canvas');
-      card.appendChild(canvas);
-
-      const counts = {1:0,2:0,3:0,4:0,5:0};
-      let sum = 0, n = 0;
-      rows.forEach(r => {
-        const v = r.answers[q.id];
-        if(typeof v === 'number' && v>=1 && v<=5){
-          counts[v]++; sum += v; n++;
-        }
-      });
-      const avg = n ? (sum/n).toFixed(2) : '0.00';
-      const avgEl = document.createElement('div');
-      avgEl.className = 'text-sm opacity-70 mt-2';
-      avgEl.textContent = `Avg: ${avg}`;
-      card.appendChild(avgEl);
-
-      new Chart(canvas.getContext('2d'), {
-        type: 'bar',
-        data: { labels: ['1','2','3','4','5'], datasets: [{ label: 'Count', data: [counts[1],counts[2],counts[3],counts[4],counts[5]] }] },
-        options: { responsive: true, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
-      });
-
+  async function renderResults(survey){
+    const rows = await fetchResponses(survey.id);
+    resultsTitle.textContent = `Results (${rows.length} responses)`; chartsWrap.innerHTML=''; commentsWrap.innerHTML='';
+    const likerts = survey.questions.filter(q=>q.type==='likert5');
+    for(const q of likerts){
+      const card=document.createElement('div'); card.className='bg-white border rounded-2xl p-4';
+      const head=document.createElement('div'); head.className='flex items-center justify-between mb-2'; head.innerHTML=`<div class="font-medium">${q.text}</div>`; card.appendChild(head);
+      const canvas=document.createElement('canvas'); card.appendChild(canvas);
+      const counts={1:0,2:0,3:0,4:0,5:0}; let sum=0, n=0;
+      rows.forEach(r=>{ const v=r.answers[q.id]; if(typeof v==='number' && v>=1 && v<=5){ counts[v]++; sum+=v; n++; } });
+      const avg=n?(sum/n).toFixed(2):'0.00';
+      const avgEl=document.createElement('div'); avgEl.className='text-sm opacity-70 mt-2'; avgEl.textContent=`Avg: ${avg}`; card.appendChild(avgEl);
+      new Chart(canvas.getContext('2d'), { type:'bar', data:{ labels:['1','2','3','4','5'], datasets:[{label:'Count', data:[counts[1],counts[2],counts[3],counts[4],counts[5]] }] }, options:{responsive:true, scales:{ y:{ beginAtZero:true, ticks:{ precision:0 } } } } });
       chartsWrap.appendChild(card);
-    });
-
-    // Comments
-    const textQ = survey.questions.find(q => q.type === 'text');
-    if(textQ){
-      const wrap = document.createElement('div');
-      wrap.className = 'bg-white border rounded-2xl p-4';
-      const title = document.createElement('div');
-      title.className = 'font-medium mb-2';
-      title.textContent = 'Comments';
-      wrap.appendChild(title);
-      rows.forEach(r => {
-        const val = r.answers[textQ.id];
-        if(val && String(val).trim()){
-          const p = document.createElement('div');
-          p.className = 'text-sm p-2 bg-slate-100 rounded-xl mb-2';
-          p.textContent = String(val);
-          wrap.appendChild(p);
-        }
-      });
-      commentsWrap.appendChild(wrap);
     }
-
-    exportCSV.onclick = () => {
-      const headers = ['submittedAt', ...survey.questions.map(q => q.text.replaceAll(',', ';'))];
-      const lines = rows.map(r => {
-        const cols = [new Date(r.submittedAt).toISOString(), ...survey.questions.map(q => String(r.answers[q.id] ?? ''))];
-        return cols.join(',');
-      });
-      const csv = [headers.join(','), ...lines].join('\n');
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${survey.title.replaceAll(' ','_')}_responses.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    };
+    const textQ = survey.questions.find(q=>q.type==='text');
+    if(textQ){ const wrap=document.createElement('div'); wrap.className='bg-white border rounded-2xl p-4'; const title=document.createElement('div'); title.className='font-medium mb-2'; title.textContent='Comments'; wrap.appendChild(title); rows.forEach(r=>{ const v=r.answers[textQ.id]; if(v && String(v).trim()){ const p=document.createElement('div'); p.className='text-sm p-2 bg-slate-100 rounded-xl mb-2'; p.textContent=String(v); wrap.appendChild(p);} }); commentsWrap.appendChild(wrap); }
+    exportCSV.onclick = ()=>{ const headers=['submittedAt', ...survey.questions.map(q=>q.text.replaceAll(',',';'))]; const lines=rows.map(r=>[new Date(r.submitted_at).toISOString(), ...survey.questions.map(q=>String(r.answers[q.id]??''))].join(',')); const csv=[headers.join(','), ...lines].join('\n'); const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=(survey.title||'QuickPulse')+'_responses.csv'; a.click(); URL.revokeObjectURL(url); };
   }
 
   function showHost(){ hostSection.classList.remove('hidden'); respondSection.classList.add('hidden'); }
   function showRespond(){ respondSection.classList.remove('hidden'); hostSection.classList.add('hidden'); }
+  tabHost.onclick = showHost; tabRespond.onclick = showRespond;
 
-  // ---- Tabs ----
-  tabHost.onclick = showHost;
-  tabRespond.onclick = showRespond;
+  function generateSurveyAndShare(){ const survey = buildSurvey(); const link = surveyToUrl(survey); shareLink.value=link; shareCard.classList.remove('hidden'); resultsCard.classList.remove('hidden'); renderResults(survey); qrDiv.innerHTML=''; const qr=new QRCode(qrDiv,{text:link,width:256,height:256}); setTimeout(()=>{ const img=qrDiv.querySelector('img'); if(img){ downloadQR.href=img.src; downloadQR.download=(survey.title||'QuickPulse').replaceAll(' ','_')+'_QR.png'; } },300); copyLinkBtn.onclick=async()=>{ await navigator.clipboard.writeText(link); copyLinkBtn.textContent='Copied!'; setTimeout(()=>copyLinkBtn.textContent='Copy',1200); }; }
+  generateBtn.onclick = generateSurveyAndShare;
 
-  // ---- Builder actions ----
-  addLikertBtn.onclick = addLikert;
-  addTextBtn.onclick = addText;
-  renderQuestions();
-
-  // Keep branding preview live
-  function refreshBrandingPreview(){
-    applyBranding(brandNameInput.value.trim(), accentInput.value.trim(), logoInput.value.trim());
-  }
-  [brandNameInput, accentInput, logoInput].forEach(el => el.addEventListener('input', refreshBrandingPreview));
-  refreshBrandingPreview();
-
-  // Generate link + QR
-  generateBtn.onclick = () => {
-    const survey = buildSurvey();
-    const link = surveyToUrl(survey);
-    shareLink.value = link;
-    shareCard.classList.remove('hidden');
-    resultsCard.classList.remove('hidden');
-    renderResults(survey);
-
-    // QR render
-    qrDiv.innerHTML = '';
-    const qr = new QRCode(qrDiv, { text: link, width: 256, height: 256 });
-    // Download QR as PNG
-    setTimeout(() => {
-      const img = qrDiv.querySelector('img');
-      if(img){
-        downloadQR.href = img.src;
-        downloadQR.download = `${(survey.title || 'QuickPulse').replaceAll(' ','_')}_QR.png`;
-      }
-    }, 300);
-
-    // Copy link
-    copyLinkBtn.onclick = async () => {
-      await navigator.clipboard.writeText(link);
-      copyLinkBtn.textContent = 'Copied!';
-      setTimeout(() => (copyLinkBtn.textContent = 'Copy'), 1200);
-    };
-  };
-
-  // ---- Respond mode if URL has survey ----
-  function bootFromHash(){
-    const sv = surveyFromHash();
-    if(sv){
-      showRespond();
-      renderRespondForm(sv);
-    } else {
-      showHost();
-    }
-  }
+  function bootFromHash(){ const sv=surveyFromHash(); if(sv){ showRespond(); renderRespondForm(sv); } else { showHost(); } }
   window.addEventListener('hashchange', bootFromHash);
-  bootFromHash();
+  getSupabase(); bootFromHash();
 </script>
 </body>
 </html>
